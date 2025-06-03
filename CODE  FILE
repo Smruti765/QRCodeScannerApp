@@ -1,0 +1,81 @@
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+using AForge.Video;
+using AForge.Video.DirectShow;
+using ZXing;
+
+namespace QRCodeScannerApp
+{
+    public partial class Form1 : Form
+    {
+        private FilterInfoCollection videoDevices;
+        private VideoCaptureDevice videoSource;
+        private Timer qrTimer;
+
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+            foreach (FilterInfo device in videoDevices)
+            {
+                comboBoxCameras.Items.Add(device.Name);
+            }
+
+            if (comboBoxCameras.Items.Count > 0)
+                comboBoxCameras.SelectedIndex = 0;
+
+            qrTimer = new Timer();
+            qrTimer.Interval = 300;
+            qrTimer.Tick += qrTimer_Tick;
+        }
+
+        private void btnStart_Click(object sender, EventArgs e)
+        {
+            if (videoDevices.Count == 0)
+            {
+                MessageBox.Show("No camera found.");
+                return;
+            }
+
+            videoSource = new VideoCaptureDevice(videoDevices[comboBoxCameras.SelectedIndex].MonikerString);
+            videoSource.NewFrame += videoSource_NewFrame;
+            videoSource.Start();
+            qrTimer.Start();
+        }
+
+        private void videoSource_NewFrame(object sender, NewFrameEventArgs eventArgs)
+        {
+            Bitmap frame = (Bitmap)eventArgs.Frame.Clone();
+            pictureBoxPreview.Image = frame;
+        }
+
+        private void qrTimer_Tick(object sender, EventArgs e)
+        {
+            if (pictureBoxPreview.Image != null)
+            {
+                BarcodeReader reader = new BarcodeReader();
+                Result result = reader.Decode((Bitmap)pictureBoxPreview.Image);
+
+                if (result != null)
+                {
+                    txtResult.Text = result.Text;
+                    qrTimer.Stop(); // एक बार scan के बाद रुके
+                }
+            }
+        }
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (videoSource != null && videoSource.IsRunning)
+            {
+                videoSource.SignalToStop();
+                videoSource.WaitForStop();
+            }
+        }
+    }
+}
